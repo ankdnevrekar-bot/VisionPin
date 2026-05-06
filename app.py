@@ -39,4 +39,18 @@ if uploaded_files:
         cols[i % 3].image(img, use_column_width=True)
 else:
     st.write("Waiting for your first pin...")
-    
+        # Show the grid with styling
+    cols = st.columns(3)
+    for i, file in enumerate(uploaded_files):
+        img = Image.open(file)
+        with cols[i % 3]:
+            # This adds a soft shadow and rounded corners to each "Pin"
+            st.markdown(f"""
+                <div style="box-shadow: 10px 10px 20px rgba(0,0,0,0.1); 
+                            border-radius: 15px; 
+                            overflow: hidden; 
+                            margin-bottom: 20px;">
+                </div>
+            """, unsafe_allow_html=True)
+            st.image(img, use_column_width=True)
+            
