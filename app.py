@@ -1,37 +1,73 @@
 import streamlit as st
-from PIL import Image, ImageOps, ImageEnhance, ImageDraw, ImageFont
+from PIL import Image, ImageOps, ImageEnhance, ImageDraw
+from transformers import BlipProcessor, BlipForConditionalGeneration
 
-# (Keep your load_models and get_dominant_color functions the same as before)
+# 1. Load AI Models (This might take a minute the first time)
+@st.cache_resource
+def load_models():
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+    return processor, model
 
-# ... [Previous functions here] ...
+processor, model = load_models()
 
-# 3. Sidebar: Aesthetic & Text Controls
-st.sidebar.header("🎨 Design Studio")
-filter_type = st.sidebar.selectbox("Choose a Vibe", ["None", "Soft Pink", "Retro Sepia"])
-custom_text = st.sidebar.text_input("Add a Text Label", "My Aesthetic")
-text_color = st.sidebar.color_picker("Text Color", "#FFFFFF")
+# 2. Setup the "Aesthetic"
+st.set_page_config(page_title="VisionPin Studio", layout="wide")
 
-# 4. Main App Logic
-uploaded_files = st.file_uploader("Upload your Pins", accept_multiple_files=True)
+def get_dominant_color(pil_img):
+    # This shrinks the image to 1 pixel to get the average RGB
+    img = pil_img.convert("RGB").resize((1, 1), resample=Image.Resampling.BILINEAR)
+    return img.getpixel((0, 0)) # Returns (R, G, B)
+
+st.title("🎀 VisionPin Creative Studio")
+
+# 3. Sidebar Design Controls
+st.sidebar.header("🎨 Design Tools")
+custom_text = st.sidebar.text_input("Add a Label to your Pins", "Aesthetic Vibe")
+filter_type = st.sidebar.selectbox("Choose a Filter", ["None", "Soft Pink", "Retro Sepia"])
+brightness = st.sidebar.slider("Brightness", 0.5, 1.5, 1.0)
+
+# 4. The Main Engine
+uploaded_files = st.file_uploader("Upload your photos", accept_multiple_files=True)
 
 if uploaded_files:
+    # Use first image to set the background
     first_img = Image.open(uploaded_files[0])
     r, g, b = get_dominant_color(first_img)
-    st.markdown(f"<style>.stApp {{ background-color: '#%02x%02x%02x' % (r,g,b) }}33; </style>", unsafe_allow_html=True)
-
+    hex_color = '#%02x%02x%02x' % (r, g, b)
+    
+    st.markdown(f"<style>.stApp {{ background-color: {hex_color}44; }}</style>", unsafe_allow_html=True)
+    
     cols = st.columns(3)
     for i, file in enumerate(uploaded_files):
         img = Image.open(file).convert('RGB')
         
-        # --- FEATURE: Dynamic Text Box ---
+        # --- FEATURE: Text Overlay ---
         if custom_text:
             draw = ImageDraw.Draw(img)
-            # We use a basic font, but you can upload a .ttf file to GitHub for fancy fonts!
-            draw.text((20, 20), custom_text, fill=text_color)
+            draw.text((15, 15), custom_text, fill="white")
 
-        # (Apply filters like Soft Pink here...)
+        # --- FEATURE: AI Caption ---
+        inputs = processor(img, return_tensors="pt")
+        out = model.generate(**inputs)
+        caption = processor.decode(out[0], skip_special_tokens=True)
+
+        # --- FEATURE: Filters ---
+        if filter_type == "Soft Pink":
+            pink = Image.new('RGB', img.size, (255, 182, 193))
+            img = Image.blend(img, pink, 0.2)
+        elif filter_type == "Retro Sepia":
+            img = ImageOps.colorize(ImageOps.grayscale(img), "#704214", "#C0A080")
         
+        img = ImageEnhance.Brightness(img).enhance(brightness)
+
         with cols[i % 3]:
             st.image(img, use_column_width=True)
-            # [AI Caption display stays here]
-            
+            st.markdown(f"""
+                <div style="background-color: white; padding: 10px; border-radius: 0 0 10px 10px; margin-top: -10px; margin-bottom: 20px;">
+                    <p style="color: #D87093; font-size: 0.8em; margin: 0;"><b>AI:</b> {caption}</p>
+                </div>
+            """, unsafe_allow_html=True)
+else:
+    st.info("Upload some photos to start your studio!")
+    
